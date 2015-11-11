@@ -4,6 +4,8 @@ We are going to turn on three CoreOS VMs under vagrant and set them under variou
 
 ```
 git clone https://github.com/coreos/coreos-vagrant
+cd coreos-vagarnt
+git clone https://github.com/philips/real-world-kubernetes
 sed -e 's%num_instances=1%num_instances=3%g' < config.rb.sample > config.rb
 ```
 
@@ -284,46 +286,244 @@ vagrant up
 vagrant ssh-config > ssh-config
 ```
 
-First, lets generate a certificate authority and some certificates signed by that authority.
+## Generate Certificate Authority
 
-Now, lets prepare etcd to use a certificate and key file which we will generate
-
-```
-ssh core-01
-sudo su 
-mkdir /etc/etcd
-mkdir /etc/systemd/system/etcd2.service.d/
-cat  <<EOM > /etc/systemd/system/etcd2.service.d/10-listen.conf
-[Service]
-Environment=ETCD_NAME=core-01
-Environment=ETCD_ADVERTISE_CLIENT_URLS=https://localhost:2379
-Environment=ETCD_LISTEN_CLIENT_URLS=https://0.0.0.0:2379
-Environment=ETCD_CERT_FILE=/etc/etcd/etcd.pem
-Environment=ETCD_KEY_FILE=/etc/etcd/etcd-key.pem
-EOM
-```
+First, lets generate a certificate authority and some certificates signed by that authority. You can take a look at the makefile but it essentially using the [cfssl](https://github.com/cloudflare/cfssl) tool to generate a CA and an etcd cert signed by that CA.
 
 ```
-scp 2015-kubecon/tls-setup/tls/certs/etcd* core-01:
-scp 2015-kubecon/tls-setup/tls/certs/ca.pem core-01:
+pushd real-world-kubernetes/tls-setup
+make install-cfssl
+make
+popd
 ```
 
-Setup the certificates 
+Now drop the certs onto the host:
+
+```
+scp -r real-world-kubernetes/tls-setup/certs core-01:
+```
+
+## Use CA with etcd
+
+Install the newly generated certificates onto the host. In a real-world environment this would be done with a cloud-config or installed on first boot.
 
 ```
 ssh core-01
 sudo su
-mv etcd* /etc/etcd
+mkdir /etc/etcd
+mv certs/etcd* /etc/etcd
 chown -R etcd: /etc/etcd
+cp certs/ca.pem /etc/ssl/certs/
+/usr/bin/c_rehash
+exit
+exit
+```
+
+Finally, prepare etcd to use a certificate and key file that are dropped onto the host.
+
+```
+ssh core-01
+sudo su
+mkdir /etc/systemd/system/etcd2.service.d/
+cat  <<EOM > /etc/systemd/system/etcd2.service.d/10-listen.conf
+[Service]
+Environment=ETCD_NAME=core-01
+Environment=ETCD_ADVERTISE_CLIENT_URLS=https://core-01:2379
+Environment=ETCD_LISTEN_CLIENT_URLS=https://0.0.0.0:2379
+Environment=ETCD_CERT_FILE=/etc/etcd/etcd.pem
+Environment=ETCD_KEY_FILE=/etc/etcd/etcd-key.pem
+EOM
 systemctl daemon-reload
-systemctl start etcd2
+systemctl restart etcd2
+exit
+exit
+```
+
+## Test with etcdctl
+
+With everything in place we should be able to set a key over a secure connection:
+
+```
+ssh core-01
+etcdctl --peers https://core-01:2379 --ca-file certs/ca.pem set kubernetes is-ready
+```
+
+# Kubernetes API Server
+
+Now that we fully understand etcd and how to operate it securely and in clusters lets bringup a Kubernetes API server.
+
+Get the basic configuration files in place on the server.
+
+```
+scp -r real-world-kubernetes/k8s-setup core-01:
+```
+
+Then copy them over to the right locations and restart the kubelet to have it bootstrap the API server.
+
+```
+ssh core-01
+sudo su
+mkdir -p /etc/kubernetes/ssl/
+cp certs/ca.pem /etc/kubernetes/ssl/
+cp certs/apiserver* /etc/kubernetes/ssl/
+cp k8s-setup/kubelet.service /etc/systemd/system/kubelet.service
+mkdir -p /etc/kubernetes/manifests/
+cp k8s-setup/kube-*.yaml /etc/kubernetes/manifests/
+systemctl daemon-reload
+systemctl restart kubelet.service
+systemctl enable kubelet
+exit
+exit
+```
+
+## Test API
+
+At this point the API should be up and available. But, we need a DNS entry to point at; so lets set that up first on our workstations. NOTE: this IP will change based on host configuration. 
+
+```
+export CORE_01_IP=$(cat ssh-config | grep HostName | awk '{print $2}' | head -n1)
+sudo -E /bin/sh -c 'echo "${CORE_01_IP} core-01" >> /etc/hosts'
+```
+
+With DNS configured we can try `kubectl` with our pre-made configuration file:
+
+```
+export KUBECONFIG=real-world-kubernetes/kubeconfig
+kubectl get pods
+```
+
+If all goes well we shoudl get an empty list of pods! Now, lets add some worker nodes.
+
+# Kubernetes API Server Under etcd Failure
+
+## Temporary Partition
+
+Lets start a really boring job on the cluster that just sleeps forever. This goes through just fine:
+
+```
+kubectl run pause --image=gcr.io/google_containers/pause
+```
+
+Next, we will stop etcd simulating a partition:
+
+```
+ssh core-01 sudo systemctl stop etcd2
+```
+
+Attempting to do any API call to the server is going to fail blocked on etcd. This behavior is identical to if you had a web service and stopped its SQL database.
+
+```
+kubectl describe rc pause
+```
+
+Lets start up etcd and get things going:
+
+```
+ssh core-01 sudo systemctl start etcd2
+``` 
+
+After a few seconds the API server should start responding and we should be able to get the status of our replication controller:
+
+```
+kubectl describe rc pause
+```
+
+## Data-loss and Restore
+
+```
+kubectl run pause --image=gcr.io/google_containers/pause
 ```
 
 ```
-etcdctl --peers https://localhost:2379 --ca-file ca.pem set kubernetes is-ready
+ssh core-01 sudo tar cfz - /var/lib/etcd2 > backup.tar.gz
+
+```
+kubectl scale rc pause --replicas=5
+kubectl describe rc pause
 ```
 
-## Vagrant
+```
+ssh core-01 sudo systemctl stop etcd2
+```
+
+```
+ssh core-01
+sudo su
+mkdir tmp
+mv /etc/kubernetes/manifests/kube-* tmp/
+rm -Rf /var/lib/etcd2/*
+exit
+docker ps
+exit
+```
+
+```
+scp backup.tar.gz core-01:
+ssh core-01
+tar xzvf backup.tar.gz
+sudo su
+mv var/lib/etcd2/member /var/lib/etcd2/
+chown -R etcd /var/lib/etcd2
+systemctl start etcd2.service
+mv tmp/* /etc/kubernetes/manifests
+```
+
+```
+etcdctl --peers https://core-01:2379 --ca-file certs/ca.pem set kubernetes is-ready
+```
+
+
+```
+kubectl describe rc pause
+kubectl scale rc pause --replicas=5
+```
+
+# Kubernetes Workers 
+
+## Setup Workers
+
+Lets setup core-02 and core-03 as the worker machines.
+
+```
+WORKER=core-02
+```
+
+```
+scp -r real-world-kubernetes/worker-setup ${WORKER}:
+scp -r real-world-kubernetes/tls-setup/certs ${WORKER}:
+ssh ${WORKER}
+sudo su
+mkdir -p /etc/kubernetes/ssl/ /etc/kubernetes/manifests
+cp certs/ca.pem /etc/kubernetes/ssl/
+cp certs/worker* /etc/kubernetes/ssl/
+cp worker-setup/kubelet.service /etc/systemd/system/kubelet.service
+cp worker-setup/kube-*.yaml /etc/kubernetes/manifests/
+cp worker-setup/worker-kubeconfig.yaml /etc/kubernetes
+systemctl daemon-reload
+systemctl restart kubelet.service
+systemctl enable kubelet
+exit
+exit
+```
+
+Now re-run the above after changing the worker variable to setup core-03:
+
+```
+WORKER=core-03
+```
+
+At this point we should see two machines listed in the set of machines
+
+```
+kubectl get nodes
+```
+
+# 
+
+# Kubectl Test Out
+
+## Bootstrap with Kubelet
+
 
 ## Getting stuff running on OSX
 
