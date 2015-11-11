@@ -1,0 +1,11 @@
+#cloud-config
+
+---
+write_files:
+- path: /etc/hosts
+  permissions: '0644'
+  owner: root
+  content: |
+    172.17.8.101 core-01
+    172.17.8.102 core-02
+    172.17.8.103 core-03
