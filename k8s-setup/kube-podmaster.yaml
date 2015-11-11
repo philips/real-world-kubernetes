@@ -12,7 +12,6 @@ spec:
     - /podmaster
     - --etcd-servers=https://core-01:2379
     - --key=scheduler
-    - --whoami=172.17.8.101
     - --source-file=/src/manifests/kube-scheduler.yaml
     - --dest-file=/dst/manifests/kube-scheduler.yaml
     volumeMounts:
@@ -27,7 +26,6 @@ spec:
     - /podmaster
     - --etcd-servers=https://core-01:2379
     - --key=controller
-    - --whoami=172.17.8.101
     - --source-file=/src/manifests/kube-controller-manager.yaml
     - --dest-file=/dst/manifests/kube-controller-manager.yaml
     terminationMessagePath: /dev/termination-log

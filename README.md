@@ -550,19 +550,24 @@ kubectl describe node core-03 core-02
 
 # High Availability of API Server
 
-```
-CONTROLLER=core-01
-```
+This is easy, the API server is trivially horizontally scalable.
+
+Set the controller to core-02 and re-run the controller provisioning steps from before against this host.
 
 ```
-ssh ${CONTROLLER}
-sudo su
-rm /etc/kubernetes/manifest/
-mkdir -p /srv/kubernetes/
+CONTROLLER=core-02
+```
+
+Now test out that the kubernetes services are running.
+
+```
+kubectl -s https://core-02 get pods
 ```
 
 # High Availability of Scheduler/Controller-Manager
 
+```
 
+```
 
 # Authenticating API Server
