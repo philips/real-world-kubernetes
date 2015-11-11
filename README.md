@@ -348,20 +348,27 @@ ssh core-01
 etcdctl --peers https://core-01:2379 --ca-file certs/ca.pem set kubernetes is-ready
 ```
 
-# Kubernetes API Server
+# Running Kubernetes API Server
 
 Now that we fully understand etcd and how to operate it securely and in clusters lets bringup a Kubernetes API server.
+
+
+```
+CONTROLLER=core-01
+```
 
 Get the basic configuration files in place on the server.
 
 ```
-scp -r real-world-kubernetes/k8s-setup core-01:
+scp -r real-world-kubernetes/k8s-setup ${CONTROLLER}:
+scp -r real-world-kubernetes/k8s-srv-setup ${CONTROLLER}:
 ```
 
 Then copy them over to the right locations and restart the kubelet to have it bootstrap the API server.
 
+
 ```
-ssh core-01
+ssh ${CONTROLLER}
 sudo su
 mkdir -p /etc/kubernetes/ssl/
 cp certs/ca.pem /etc/kubernetes/ssl/
@@ -369,6 +376,8 @@ cp certs/apiserver* /etc/kubernetes/ssl/
 cp k8s-setup/kubelet.service /etc/systemd/system/kubelet.service
 mkdir -p /etc/kubernetes/manifests/
 cp k8s-setup/kube-*.yaml /etc/kubernetes/manifests/
+mkdir -p /srv/kubernetes/manifests
+cp k8s-srv-setup/*.yaml /srv/kubernetes/manifests
 systemctl daemon-reload
 systemctl restart kubelet.service
 systemctl enable kubelet
@@ -430,12 +439,17 @@ kubectl describe rc pause
 
 ## Data-loss and Restore
 
+Lets run a really boring application in this cluster with no nodes:
+
 ```
 kubectl run pause --image=gcr.io/google_containers/pause
 ```
 
+And take a quick backup of etcd:
+
 ```
 ssh core-01 sudo tar cfz - /var/lib/etcd2 > backup.tar.gz
+```
 
 ```
 kubectl scale rc pause --replicas=5
@@ -466,16 +480,14 @@ mv var/lib/etcd2/member /var/lib/etcd2/
 chown -R etcd /var/lib/etcd2
 systemctl start etcd2.service
 mv tmp/* /etc/kubernetes/manifests
-```
-
-```
+exit
 etcdctl --peers https://core-01:2379 --ca-file certs/ca.pem set kubernetes is-ready
+exit
 ```
-
 
 ```
 kubectl describe rc pause
-kubectl scale rc pause --replicas=5
+kubectl scale rc pause --replicas=1
 ```
 
 # Kubernetes Workers 
@@ -518,4 +530,39 @@ At this point we should see two machines listed in the set of machines
 kubectl get nodes
 ```
 
-# Kubectl Test Out
+## Individual Worker Failure
+
+
+```
+kubectl describe rc pause
+kubectl scale rc pause --replicas=10
+```
+
+```
+vagrant halt core-01
+```
+
+Now after about one minute we should notice everything has been moved off of core-03. Why? It is because of a thing called the 
+
+```
+kubectl describe node core-03 core-02
+```
+
+# High Availability of API Server
+
+```
+CONTROLLER=core-01
+```
+
+```
+ssh ${CONTROLLER}
+sudo su
+rm /etc/kubernetes/manifest/
+mkdir -p /srv/kubernetes/
+```
+
+# High Availability of Scheduler/Controller-Manager
+
+
+
+# Authenticating API Server
