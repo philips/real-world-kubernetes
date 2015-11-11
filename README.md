@@ -564,10 +564,32 @@ Now test out that the kubernetes services are running.
 kubectl -s https://core-02 get pods
 ```
 
-# High Availability of Scheduler/Controller-Manager
+# High-Availability of Scheduler/Controller-Manager
+
+There is a service called the pod master that moves things in and out of the kubelet's manifest directory based on compare and swap operations in etcd.
+
+
+Let's force a master election of the scheduler by removing all of the control pieces, including the pod master out of the host.
 
 ```
-
+ssh core-01
+sudo su
+mkdir tmp
+mv /etc/kubernetes/manifests/* tmp
 ```
 
-# Authenticating API Server
+After a few seconds we should see that the scheduler and controller manager get master elected over to 
+
+```
+ssh core-02
+sudo su
+ls -la /etc/kubernetes/manifests
+```
+
+With this mechanism in place and an HA etcd cluster you can rest easy knowing the control plane won't go down in the face of single machine failure.
+
+## Cleanup
+
+# Upgrading Control Cluster
+
+Now upgrading under the control plane between minor versions is something you might realistically do. However, these sorts of scenarios aren't really tested.
