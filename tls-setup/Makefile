@@ -23,7 +23,17 @@ req:
 	  -ca certs/ca.pem \
 	  -ca-key certs/ca-key.pem \
 	  -config config/ca-config.json \
-	  config/req-csr.json | $(JSON) -bare certs/k8s
+	  config/req-csr.json | $(JSON) -bare certs/apiserver
+	$(CFSSL) gencert \
+	  -ca certs/ca.pem \
+	  -ca-key certs/ca-key.pem \
+	  -config config/ca-config.json \
+	  config/req-csr.json | $(JSON) -bare certs/worker
+	$(CFSSL) gencert \
+	  -ca certs/ca.pem \
+	  -ca-key certs/ca-key.pem \
+	  -config config/ca-config.json \
+	  config/req-csr.json | $(JSON) -bare certs/admin
 
 clean:
 	rm -rf certs
