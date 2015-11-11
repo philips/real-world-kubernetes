@@ -518,16 +518,4 @@ At this point we should see two machines listed in the set of machines
 kubectl get nodes
 ```
 
-# 
-
 # Kubectl Test Out
-
-## Bootstrap with Kubelet
-
-
-## Getting stuff running on OSX
-
- ./_output/local/bin/darwin/amd64/kube-apiserver  --service-cluster-ip-range='10.0.0.0/16' --etcd-servers='http://127.0.0.1:2379' --bind-address=0.0.0.0 --advertise-address='10.0.0.1' --cert-dir="/var/run/kubernetes"
-
-## Experiment with etcd backup and restore
- 
