@@ -18,21 +18,25 @@ req:
 	  -ca certs/ca.pem \
 	  -ca-key certs/ca-key.pem \
 	  -config config/ca-config.json \
+	  -hostname core-01,core-02,core-03 \
 	  config/req-csr.json | $(JSON) -bare certs/etcd
 	$(CFSSL) gencert \
 	  -ca certs/ca.pem \
 	  -ca-key certs/ca-key.pem \
 	  -config config/ca-config.json \
+	  -hostname core-01,core-02,core-03 \
 	  config/req-csr.json | $(JSON) -bare certs/apiserver
 	$(CFSSL) gencert \
 	  -ca certs/ca.pem \
 	  -ca-key certs/ca-key.pem \
 	  -config config/ca-config.json \
+	  -hostname core-01,core-02,core-03 \
 	  config/req-csr.json | $(JSON) -bare certs/worker
 	$(CFSSL) gencert \
 	  -ca certs/ca.pem \
 	  -ca-key certs/ca-key.pem \
 	  -config config/ca-config.json \
+	  -hostname core-01,core-02,core-03 \
 	  config/req-csr.json | $(JSON) -bare certs/admin
 
 clean:

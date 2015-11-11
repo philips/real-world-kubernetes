@@ -1,0 +1,14 @@
+[Service]
+ExecStart=/usr/bin/kubelet \
+  --api_servers=http://127.0.0.1:8080 \
+  --register-node=false \
+  --allow-privileged=true \
+  --config=/etc/kubernetes/manifests \
+  --hostname-override=core-01 \
+  --cluster_dns=10.3.0.10 \
+  --cluster_domain=cluster.local \
+  --cadvisor-port=0
+Restart=always
+RestartSec=10
+[Install]
+WantedBy=multi-user.target
