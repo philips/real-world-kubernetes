@@ -4,7 +4,7 @@ We are going to turn on three CoreOS VMs under vagrant and set them under variou
 
 ```
 git clone https://github.com/coreos/coreos-vagrant
-cd coreos-vagarnt
+cd coreos-vagrant
 git clone https://github.com/philips/real-world-kubernetes
 sed -e 's%num_instances=1%num_instances=3%g' < config.rb.sample > config.rb
 ```
@@ -243,7 +243,7 @@ mv var/lib/etcd2/member /var/lib/etcd2/
 chown -R etcd /var/lib/etcd2
 ```
 
-Next we need to tell etcd to start but to only use the data, not the cluster configuration. We do this by setting a flag called FORCE_NEW_CLUSTER. This is somthing like "single user mode" on a Linux host.
+Next we need to tell etcd to start but to only use the data, not the cluster configuration. We do this by setting a flag called FORCE_NEW_CLUSTER. This is something like "single user mode" on a Linux host.
 
 ```
 mkdir -p /run/systemd/system/etcd2.service.d
