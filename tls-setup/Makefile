@@ -1,7 +1,8 @@
 .PHONY: cfssl ca req clean
 
-CFSSL	= @env PATH=$(GOPATH)/bin:$(PATH) cfssl
-JSON	= env PATH=$(GOPATH)/bin:$(PATH) cfssljson
+GOPATH  = .
+CFSSL	= @env PATH=$(GOPATH)/bin cfssl
+JSON	= env PATH=$(GOPATH)/bin cfssljson
 
 all: ca req
 
