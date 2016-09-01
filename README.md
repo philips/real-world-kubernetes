@@ -135,12 +135,12 @@ Now, at this point the cluster is in an unsafe configuration. If either machine 
 sudo systemctl stop etcd2
 exit
 vagrant ssh core-01
-sudo systemctl set kubernetes bad
-sudo systemctl get kubernetes
+sudo etcdctl set kubernetes bad
+sudo etcdctl get kubernetes
 exit
 vagrant ssh core-02
 sudo systemctl start etcd2
-sudo systemctl set kubernetes awesome
+sudo etcdctl set kubernetes awesome
 ```
 
 ## Add core-03 to the Cluster
